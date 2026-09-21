@@ -273,6 +273,8 @@ jobs:
       - name: Build technician msi
         run: |
           Copy-Item -Force rwts/technician.custom.txt ./rustdesk/custom.txt
+          # The MSI sources install and reference "<app name>.exe".
+          Move-Item -Force ./rustdesk/rustdesk.exe "./rustdesk/${{ env.APP_NAME }}.exe"
           pushd ./res/msi
           python preprocess.py --arp -d ../../rustdesk --custom --conn-type outgoing --app-name "${{ env.APP_NAME }}" --manufacturer "Real World Technology Solutions"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
