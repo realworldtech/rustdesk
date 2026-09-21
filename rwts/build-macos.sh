@@ -5,7 +5,9 @@
 # on any Mac with Xcode for each release. It repeats the macOS job of the
 # upstream workflow for the host architecture only.
 #
-# Usage:  rwts/build-macos.sh <version>            # e.g. 1.4.9-1
+# Usage:  rwts/build-macos.sh <version> [arch]     # e.g. 1.4.9-1 x86_64
+#         arch is x86_64 or arm64; the default is the host. An arm64 Mac can
+#         cross-build x86_64 (cargo --target plus the vcpkg x64-osx triplet).
 # Needs:  Xcode, Homebrew, rustup, flutter 3.24.5 on PATH, rwts-sign
 #         (RWTS_SIGN_TOKEN set or a chmod 600 .rwts-sign.credentials),
 #         gh authenticated to github.realworld.net.au.
@@ -13,8 +15,11 @@ set -euo pipefail
 VERSION="${1:?usage: rwts/build-macos.sh <version>}"
 cd "$(dirname "$0")/.."
 APP_NAME="RWTS QuickSupport"
-ARCH=$(uname -m | sed 's/x86_64/x86_64/; s/arm64/arm64/')
+ARCH="${2:-$(uname -m)}"
+case "$ARCH" in x86_64|arm64) ;; *) echo "arch must be x86_64 or arm64" >&2; exit 1;; esac
 TARGET=$([ "$ARCH" = arm64 ] && echo aarch64-apple-darwin || echo x86_64-apple-darwin)
+TRIPLET=$([ "$ARCH" = arm64 ] && echo arm64-osx || echo x64-osx)
+export MAC_ARCH="$ARCH"
 EXTRA=$([ "$ARCH" = arm64 ] && echo "--screencapturekit" || echo "")
 
 command -v rwts-sign >/dev/null || pipx install rwts-sign --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
@@ -48,9 +53,10 @@ if [ ! -x "$VCPKG_ROOT/vcpkg" ]; then
   git clone -q https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
   (cd "$VCPKG_ROOT" && git checkout -q 120deac3062162151622ca4860575a33844ba10b && ./bootstrap-vcpkg.sh -disableMetrics)
 fi
-"$VCPKG_ROOT/vcpkg" install --x-install-root="$VCPKG_ROOT/installed"
+"$VCPKG_ROOT/vcpkg" install --triplet "$TRIPLET" --x-install-root="$VCPKG_ROOT/installed"
 
-if [ "$TARGET" = aarch64-apple-darwin ]; then
+# Xcode 27 refuses the upstream 10.14 deployment target, so both architectures build for 12.3.
+if true; then
   MIN=12.3
   sed -i '' -e "s/MACOSX_DEPLOYMENT_TARGET\=[0-9]*.[0-9]*/MACOSX_DEPLOYMENT_TARGET=${MIN}/" build.py
   sed -i '' -e "s/platform :osx, '.*'/platform :osx, '${MIN}'/" flutter/macos/Podfile

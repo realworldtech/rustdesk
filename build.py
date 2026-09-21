@@ -403,18 +403,29 @@ def build_deb_from_folder(version, binary_folder):
 
 
 def build_flutter_dmg(version, features):
+    # MAC_ARCH=x86_64|arm64 selects the architecture to build for; the default is
+    # the host. A cross build passes --target to cargo and copies its output into
+    # target/release, which is where the Xcode project looks for the dylib.
+    host_arch = 'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x86_64'
+    mac_arch = os.environ.get('MAC_ARCH', host_arch)
+    target_flag = ''
+    if mac_arch != host_arch:
+        triple = 'aarch64-apple-darwin' if mac_arch == 'arm64' else 'x86_64-apple-darwin'
+        target_flag = f' --target {triple}'
     if not skip_cargo:
         # set minimum osx build target, now is 10.14, which is the same as the flutter xcode project
         system2(
-            f'MACOSX_DEPLOYMENT_TARGET=10.14 cargo build --locked --features {features} --release')
+            f'MACOSX_DEPLOYMENT_TARGET=10.14 cargo build --locked --features {features} --release{target_flag}')
+        if target_flag:
+            system2(f'mkdir -p target/release && cp target/{triple}/release/liblibrustdesk.dylib '
+                    f'target/{triple}/release/service target/release/')
     # copy dylib
     system2(
         "cp target/release/liblibrustdesk.dylib target/release/librustdesk.dylib")
     os.chdir('flutter')
-    # cargo builds a single-arch dylib for the host; restrict Xcode to the same arch
+    # cargo builds a single-arch dylib; restrict Xcode to the same arch
     # so the universal-by-default ARCHS_STANDARD doesn't try to link a missing slice.
     # FLUTTER_XCODE_* env vars are forwarded to xcodebuild as build settings.
-    mac_arch = 'arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'x86_64'
     system2(
         f'FLUTTER_XCODE_ARCHS={mac_arch} FLUTTER_XCODE_ONLY_ACTIVE_ARCH=YES flutter build macos --release')
     system2('cp -rf ../target/release/service "./build/macos/Build/Products/Release/RWTS QuickSupport.app/Contents/MacOS/"')
