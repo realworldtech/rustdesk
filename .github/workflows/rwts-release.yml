@@ -296,7 +296,7 @@ jobs:
         shell: bash
         run: |
           mv SignOutput/RWTS-QuickSupport.exe "SignOutput/RWTS-QuickSupport-${VERSION}.exe"
-          mv SignOutput/RWTS-QuickSupport.msi "SignOutput/RWTS-QuickSupport-${VERSION}.msi"
+          mv SignOutput/RWTS-QuickSupport.msi "SignOutput/RWTS-QuickSupport-Tech-${VERSION}.msi"
           ls -la SignOutput
 
       - name: Upload artifacts
