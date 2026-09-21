@@ -29,6 +29,11 @@ rustup component add rustfmt --toolchain 1.81 >/dev/null
 export RUSTUP_TOOLCHAIN=1.81
 flutter --version | head -1 | grep -q "3.24.5" || { echo "flutter 3.24.5 required" >&2; exit 1; }
 
+# bindgen 0.59 in libs/scrap cannot parse headers through a very new Homebrew
+# libclang (silently emits empty structs). Use Xcode's libclang instead.
+XCODE_LIBCLANG="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+[ -f "$XCODE_LIBCLANG/libclang.dylib" ] && export LIBCLANG_PATH="$XCODE_LIBCLANG"
+
 # Bridge files (normally produced by the generate-bridge job).
 if [ ! -f src/bridge_generated.rs ]; then
   cargo install cargo-expand --version 1.0.95 --locked
