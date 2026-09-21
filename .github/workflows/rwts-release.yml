@@ -281,7 +281,8 @@ jobs:
           # MSBuild reads the VERSION env var as its Version property; NuGet rejects "dev-<sha>".
           Remove-Item Env:VERSION
           nuget restore msi.sln
-          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          # ICE validation needs the Windows Installer service, which a service-session runner cannot reach.
+          msbuild msi.sln -p:Configuration=Release -p:Platform=x64 -p:SuppressValidation=true /p:TargetVersion=Windows10
           $msi = Get-ChildItem ./Package/bin/*/Release/en-us/Package.msi | Select-Object -First 1
           mv $msi.FullName ../../SignOutput/RWTS-QuickSupport.msi
           popd
