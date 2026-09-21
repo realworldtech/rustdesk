@@ -73,18 +73,20 @@ rm -rf flutter/build/macos
 git checkout -q build.py flutter/macos/Podfile Cargo.toml flutter/macos/Runner.xcodeproj/project.pbxproj || true
 
 APP="flutter/build/macos/Build/Products/Release/${APP_NAME}.app"
+# Uploads of ~30 MB sometimes hit a write timeout; one retry covers that.
+sign() { rwts-sign "$@" || { echo "rwts-sign failed, retrying once" >&2; sleep 10; rwts-sign "$@"; }; }
 mkdir -p SignOutput
 for flavour in quicksupport technician; do
   W="/tmp/qs-$flavour"; rm -rf "$W"; mkdir -p "$W"
   cp -R "$APP" "$W/${APP_NAME}.app"
   cp "rwts/${flavour}.custom.txt" "$W/${APP_NAME}.app/Contents/Resources/custom.txt"
   ditto -c -k --keepParent "$W/${APP_NAME}.app" "$W/app.zip"
-  rwts-sign macos-app "$W/app.zip" --notarize
+  sign macos-app "$W/app.zip" --notarize
   rm -rf "$W/${APP_NAME}.app"; ditto -x -k "$W/app.zip" "$W/"
   if [ "$flavour" = technician ]; then OUT="SignOutput/RWTS-QuickSupport-Tech-${VERSION}-${ARCH}.dmg"; else OUT="SignOutput/RWTS-QuickSupport-${VERSION}-${ARCH}.dmg"; fi
   rm -f "$OUT"
   create-dmg --icon "${APP_NAME}.app" 200 190 --hide-extension "${APP_NAME}.app" --window-size 800 400 --app-drop-link 600 185 "$OUT" "$W/${APP_NAME}.app"
-  rwts-sign macos-dmg "$OUT" --notarize
+  sign macos-dmg "$OUT" --notarize
   xcrun stapler validate "$OUT"
 done
 ls -la SignOutput/*.dmg
