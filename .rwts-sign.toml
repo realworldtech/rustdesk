@@ -1,0 +1,9 @@
+endpoint = "https://codesign.realworld.net.au"
+
+[[artifact]]
+path = "SignOutput/RWTS-QuickSupport.exe"
+type = "windows-pe"
+
+[[artifact]]
+path = "SignOutput/RWTS-QuickSupport.msi"
+type = "windows-pe"
