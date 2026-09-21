@@ -134,6 +134,8 @@ jobs:
         uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0 # v2.0.9
         with:
           version: ${{ env.LLVM_VERSION }}
+          # The runner service account cannot write to the default C:\Program Files\LLVM.
+          directory: ${{ runner.tool_cache }}\llvm-${{ env.LLVM_VERSION }}
 
       - name: Install flutter
         id: flutter
