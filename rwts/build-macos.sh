@@ -25,6 +25,7 @@ if ! nasm --version 2>/dev/null | grep -q 'version 2\.'; then
 fi
 rustup toolchain install 1.81 --profile minimal >/dev/null
 rustup target add --toolchain 1.81 "$TARGET" >/dev/null
+rustup component add rustfmt --toolchain 1.81 >/dev/null
 export RUSTUP_TOOLCHAIN=1.81
 flutter --version | head -1 | grep -q "3.24.5" || { echo "flutter 3.24.5 required" >&2; exit 1; }
 
