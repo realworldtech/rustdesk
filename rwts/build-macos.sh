@@ -35,7 +35,7 @@ XCODE_LIBCLANG="$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
 [ -f "$XCODE_LIBCLANG/libclang.dylib" ] && export LIBCLANG_PATH="$XCODE_LIBCLANG"
 
 # Bridge files (normally produced by the generate-bridge job).
-if [ ! -f src/bridge_generated.rs ]; then
+if [ ! -f src/bridge_generated.rs ] || [ ! -f flutter/lib/generated_bridge.dart ]; then
   cargo install cargo-expand --version 1.0.95 --locked
   cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
   (cd flutter && flutter pub get)
