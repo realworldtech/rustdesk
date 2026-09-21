@@ -67,7 +67,7 @@ for flavour in quicksupport technician; do
   cp -R "$APP" "$W/${APP_NAME}.app"
   cp "rwts/${flavour}.custom.txt" "$W/${APP_NAME}.app/Contents/Resources/custom.txt"
   ditto -c -k --keepParent "$W/${APP_NAME}.app" "$W/app.zip"
-  rwts-sign macos-app "$W/app.zip"
+  rwts-sign macos-app "$W/app.zip" --notarize
   rm -rf "$W/${APP_NAME}.app"; ditto -x -k "$W/app.zip" "$W/"
   if [ "$flavour" = technician ]; then OUT="SignOutput/RWTS-QuickSupport-Tech-${VERSION}-${ARCH}.dmg"; else OUT="SignOutput/RWTS-QuickSupport-${VERSION}-${ARCH}.dmg"; fi
   rm -f "$OUT"
