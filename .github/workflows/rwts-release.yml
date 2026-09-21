@@ -72,7 +72,7 @@ jobs:
           cp ./flutter/macos/Runner/bridge_generated.h ./flutter/ios/Runner/bridge_generated.h
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (newest on GHES)
+        uses: actions/upload-artifact@c24449f33cd45d4826c6702db7e49f7cdb9b551d # v3-node20 (GHES rejects v4+)
         with:
           name: bridge-artifact
           path: |
@@ -125,7 +125,7 @@ jobs:
           submodules: recursive
 
       - name: Restore bridge files
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0 (newest on GHES)
+        uses: actions/download-artifact@246d7188e736d3686f6d19628d253ede9697bd55 # v3-node20 (GHES rejects v4+)
         with:
           name: bridge-artifact
           path: ./
@@ -286,7 +286,7 @@ jobs:
           ls -la SignOutput
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0 (newest on GHES)
+        uses: actions/upload-artifact@c24449f33cd45d4826c6702db7e49f7cdb9b551d # v3-node20 (GHES rejects v4+)
         with:
           name: windows-x86_64
           path: SignOutput/*
