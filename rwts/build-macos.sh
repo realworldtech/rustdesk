@@ -67,6 +67,8 @@ fi
 # Xcode adds com.apple.security.get-task-allow to ad-hoc ("-") signatures.
 # rcodesign keeps the entitlements it finds, and Apple's notary rejects that one.
 export FLUTTER_XCODE_CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
+# Products left by a build for the other architecture break the Flutter link step.
+rm -rf flutter/build/macos
 ./build.py --flutter --hwcodec --unix-file-copy-paste $EXTRA
 git checkout -q build.py flutter/macos/Podfile Cargo.toml flutter/macos/Runner.xcodeproj/project.pbxproj || true
 
