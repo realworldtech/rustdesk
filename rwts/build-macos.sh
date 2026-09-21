@@ -57,6 +57,9 @@ if [ "$TARGET" = aarch64-apple-darwin ]; then
   sed -i '' -e "s/osx_minimum_system_version = \"[0-9]*.[0-9]*\"/osx_minimum_system_version = \"${MIN}\"/" Cargo.toml
   sed -i '' -e "s/MACOSX_DEPLOYMENT_TARGET = [0-9]*.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = ${MIN};/" flutter/macos/Runner.xcodeproj/project.pbxproj
 fi
+# Xcode adds com.apple.security.get-task-allow to ad-hoc ("-") signatures.
+# rcodesign keeps the entitlements it finds, and Apple's notary rejects that one.
+export FLUTTER_XCODE_CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
 ./build.py --flutter --hwcodec --unix-file-copy-paste $EXTRA
 git checkout -q build.py flutter/macos/Podfile Cargo.toml flutter/macos/Runner.xcodeproj/project.pbxproj || true
 
