@@ -71,5 +71,10 @@ for flavour in quicksupport technician; do
 done
 ls -la SignOutput/*.dmg
 
-GH_HOST=github.realworld.net.au gh release upload "rwts/${VERSION}" SignOutput/*.dmg --clobber -R realworldtech/rustdesk
-echo "Uploaded to release rwts/${VERSION} on github.realworld.net.au"
+if GH_HOST=github.realworld.net.au gh release view "rwts/${VERSION}" -R realworldtech/rustdesk >/dev/null 2>&1; then
+  GH_HOST=github.realworld.net.au gh release upload "rwts/${VERSION}" SignOutput/*.dmg --clobber -R realworldtech/rustdesk
+  echo "Uploaded to release rwts/${VERSION} on github.realworld.net.au"
+else
+  echo "Release rwts/${VERSION} does not exist yet. Upload later with:"
+  echo "  GH_HOST=github.realworld.net.au gh release upload rwts/${VERSION} SignOutput/*.dmg -R realworldtech/rustdesk"
+fi
