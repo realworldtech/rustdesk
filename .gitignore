@@ -56,3 +56,6 @@ vcpkg_installed
 flutter/lib/generated_plugin_registrant.dart
 libsciter.dylib
 flutter/web/.rwts-sign.credentials
+
+# local signing credentials, never commit
+.rwts-sign.credentials
