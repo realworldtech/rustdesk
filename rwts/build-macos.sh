@@ -18,7 +18,7 @@ TARGET=$([ "$ARCH" = arm64 ] && echo aarch64-apple-darwin || echo x86_64-apple-d
 EXTRA=$([ "$ARCH" = arm64 ] && echo "--screencapturekit" || echo "")
 
 command -v rwts-sign >/dev/null || pipx install rwts-sign --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
-brew list llvm create-dmg pkg-config >/dev/null 2>&1 || brew install llvm create-dmg pkg-config
+brew list create-dmg pkgconf cocoapods >/dev/null 2>&1 || brew install create-dmg pkgconf cocoapods
 if ! nasm --version 2>/dev/null | grep -q 'version 2\.'; then
   echo "NASM 2.16.x is required (NASM 3.x breaks aom). Install from https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/" >&2
   exit 1
