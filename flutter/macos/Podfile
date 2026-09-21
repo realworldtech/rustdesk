@@ -34,6 +34,15 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  # Xcode 26 and later reject deployment targets below 12.0. Raise the plugin
+  # pods to the app minimum.
+  installer.pods_project.targets.each do |t|
+    t.build_configurations.each do |c|
+      if c.build_settings['MACOSX_DEPLOYMENT_TARGET'].to_f < 12.3
+        c.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '12.3'
+      end
+    end
+  end
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
   end
