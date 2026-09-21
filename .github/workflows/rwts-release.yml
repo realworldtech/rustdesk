@@ -1,7 +1,8 @@
 name: RWTS QuickSupport release
 
-# Builds the RWTS QuickSupport clients for Windows x64 and macOS from the rwts
-# branch. Steps are copied from flutter-build.yml at the upstream tag this
+# Builds the RWTS QuickSupport clients for Windows x64 from the rwts branch on
+# the internal GitHub. macOS is built by rwts/build-macos.sh on a Mac, because
+# there is no macOS runner. Steps are copied from flutter-build.yml at the upstream tag this
 # branch is based on, with signing replaced by rwts-sign. Signing runs only
 # when the RWTS_SIGN_TOKEN secret is set, so unsigned builds always work.
 
@@ -23,16 +24,70 @@ env:
 
 jobs:
   generate-bridge:
-    uses: ./.github/workflows/bridge.yml
+    # Inlined from bridge.yml, Flutter 3.24.5 variant only, on the internal ubuntu-latest runners.
+    runs-on: ubuntu-latest
+    env:
+      CARGO_EXPAND_VERSION: "1.0.95"
+      FLUTTER_RUST_BRIDGE_VERSION: "1.80.1"
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
 
-  build-RustDeskTempTopMostWindow:
-    uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
-    with:
-      upload-artifact: true
-      target: windows-2022
-      configuration: Release
-      platform: x64
-      target_version: Windows10
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y clang cmake curl gcc git g++ libclang-dev libgtk-3-dev llvm-dev nasm ninja-build pkg-config wget
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.SCITER_RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: bridge-ubuntu-latest
+
+      - name: Install flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: "3.22.3"
+          cache: true
+
+      - name: Install flutter rust bridge deps
+        shell: bash
+        run: |
+          cargo install cargo-expand --version ${{ env.CARGO_EXPAND_VERSION }} --locked
+          cargo install flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid" --locked
+          sed -i -e 's/extended_text: 14.0.0/extended_text: 13.0.0/g' flutter/pubspec.yaml
+          pushd flutter && flutter pub get && popd
+
+      - name: Run flutter rust bridge
+        run: |
+          ~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+          cp ./flutter/macos/Runner/bridge_generated.h ./flutter/ios/Runner/bridge_generated.h
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bridge-artifact
+          path: |
+            ./src/bridge_generated.rs
+            ./src/bridge_generated.io.rs
+            ./flutter/lib/generated_bridge.dart
+            ./flutter/lib/generated_bridge.freezed.dart
+            ./flutter/macos/Runner/bridge_generated.h
+            ./flutter/ios/Runner/bridge_generated.h
+
+  check-blobs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - run: pip3 install --quiet pynacl && rwts/check-blobs.sh
 
   version:
     runs-on: ubuntu-latest
@@ -50,8 +105,9 @@ jobs:
 
   build-windows:
     name: windows x86_64
-    needs: [build-RustDeskTempTopMostWindow, generate-bridge, version]
-    runs-on: windows-2022
+    needs: [generate-bridge, check-blobs, version]
+    # Project-specific Windows Server 2022 runner VM (quicksupport-winrunner) on au-east-1.
+    runs-on: [self-hosted, windows]
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -92,7 +148,8 @@ jobs:
           flutter precache --windows
           Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
           Expand-Archive -Path windows-x64-release.zip -DestinationPath windows-x64-release
-          mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
+          $engine = Join-Path $env:RUNNER_TOOL_CACHE "flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release"
+          mv -Force windows-x64-release/* $engine
 
       - name: Patch flutter
         shell: bash
@@ -168,11 +225,16 @@ jobs:
           runner_res=$(find . -name "Runner.res");
           if [ "$runner_res" != "" ]; then cp $runner_res ./libs/portable/Runner.res; fi
 
-      - name: Download RustDeskTempTopMostWindow artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: topmostwindow-artifacts-x64
-          path: "./rustdesk"
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
+
+      - name: Build RustDeskTempTopMostWindow
+        # Inlined from third-party-RustDeskTempTopMostWindow.yml.
+        run: |
+          git clone https://github.com/rustdesk-org/RustDeskTempTopMostWindow RustDeskTempTopMostWindow
+          cd RustDeskTempTopMostWindow && git checkout ecd8d6a139eee76845ea66423fb739af450fda90
+          msbuild WindowInjection/WindowInjection.vcxproj -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          Copy-Item WindowInjection/x64/Release/WindowInjection.dll ../rustdesk/
 
       - name: Install rwts-sign
         if: env.RWTS_SIGN_TOKEN != ''
@@ -198,9 +260,6 @@ jobs:
           popd
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/RWTS-QuickSupport.exe
-
-      - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
 
       - name: Build technician msi
         run: |
@@ -229,144 +288,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-x86_64
-          path: SignOutput/*
-
-      - name: Publish release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
-        with:
-          prerelease: true
-          tag_name: ${{ github.ref_name }}
-          files: SignOutput/*
-
-  build-macos:
-    name: macos ${{ matrix.job.arch }}
-    needs: [generate-bridge, version]
-    runs-on: ${{ matrix.job.os }}
-    env:
-      VERSION: ${{ needs.version.outputs.version }}
-    strategy:
-      fail-fast: false
-      matrix:
-        job:
-          - { target: x86_64-apple-darwin,  os: macos-15-intel, extra-build-args: "",                   arch: x86_64, vcpkg-triplet: x64-osx }
-          - { target: aarch64-apple-darwin, os: macos-14,       extra-build-args: "--screencapturekit", arch: arm64,  vcpkg-triplet: arm64-osx }
-    steps:
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      - name: Checkout source code
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: recursive
-
-      - name: Install build runtime
-        run: |
-          brew install llvm create-dmg
-          command -v pkg-config &>/dev/null || brew install pkg-config
-
-      - name: Install NASM
-        run: |
-          wget -q https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/nasm-2.16.03-macosx.zip
-          unzip -q nasm-2.16.03-macosx.zip
-          sudo cp nasm-2.16.03/nasm /usr/local/bin/nasm
-          nasm --version
-
-      - name: Install flutter
-        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
-        with:
-          channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-
-      - name: Patch flutter
-        run: |
-          cd $(dirname $(dirname $(which flutter)))
-          [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
-
-      - name: Workaround for flutter issue
-        shell: bash
-        run: |
-          cd "$(dirname "$(which flutter)")"
-          sed -i -e 's/_setFramesEnabledState(false);/\/\/_setFramesEnabledState(false);/g' ../packages/flutter/lib/src/scheduler/binding.dart
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
-        with:
-          toolchain: ${{ env.MAC_RUST_VERSION }}
-          targets: ${{ matrix.job.target }}
-          components: "rustfmt"
-
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          prefix-key: ${{ matrix.job.os }}
-
-      - name: Restore bridge files
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: bridge-artifact
-          path: ./
-
-      - name: Setup vcpkg with Github Actions binary cache
-        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
-        with:
-          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
-          doNotCache: false
-
-      - name: Install vcpkg dependencies
-        run: |
-          if ! $VCPKG_ROOT/vcpkg install --x-install-root="$VCPKG_ROOT/installed"; then
-            find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do echo "$_1:"; cat "$_1"; done
-            exit 1
-          fi
-
-      - name: Build rustdesk
-        run: |
-          if [ "${{ matrix.job.target }}" = "aarch64-apple-darwin" ]; then
-            MIN_MACOS_VERSION="12.3"
-            sed -i -e "s/MACOSX_DEPLOYMENT_TARGET\=[0-9]*.[0-9]*/MACOSX_DEPLOYMENT_TARGET=${MIN_MACOS_VERSION}/" build.py
-            sed -i -e "s/platform :osx, '.*'/platform :osx, '${MIN_MACOS_VERSION}'/" flutter/macos/Podfile
-            sed -i -e "s/osx_minimum_system_version = \"[0-9]*.[0-9]*\"/osx_minimum_system_version = \"${MIN_MACOS_VERSION}\"/" Cargo.toml
-            sed -i -e "s/MACOSX_DEPLOYMENT_TARGET = [0-9]*.[0-9]*;/MACOSX_DEPLOYMENT_TARGET = ${MIN_MACOS_VERSION};/" flutter/macos/Runner.xcodeproj/project.pbxproj
-          fi
-          ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
-
-      - name: Install rwts-sign
-        if: env.RWTS_SIGN_TOKEN != ''
-        run: pipx install rwts-sign --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
-
-      - name: Create dmg for each flavour
-        shell: bash
-        run: |
-          CREATE_DMG="$(readlink -f "$(command -v create-dmg)")"
-          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
-          APP="flutter/build/macos/Build/Products/Release/${APP_NAME}.app"
-          mkdir -p SignOutput
-          for flavour in quicksupport technician; do
-            rm -rf "/tmp/$flavour"; mkdir -p "/tmp/$flavour"
-            cp -R "$APP" "/tmp/$flavour/${APP_NAME}.app"
-            cp "rwts/${flavour}.custom.txt" "/tmp/$flavour/${APP_NAME}.app/Contents/Resources/custom.txt"
-            if [ "$flavour" = technician ]; then OUT="SignOutput/RWTS-QuickSupport-Tech-${VERSION}-${{ matrix.job.arch }}.dmg"; else OUT="SignOutput/RWTS-QuickSupport-${VERSION}-${{ matrix.job.arch }}.dmg"; fi
-            if [ -n "$RWTS_SIGN_TOKEN" ]; then
-              ditto -c -k --keepParent "/tmp/$flavour/${APP_NAME}.app" "/tmp/$flavour/app.zip"
-              rwts-sign macos-app "/tmp/$flavour/app.zip"
-              rm -rf "/tmp/$flavour/${APP_NAME}.app"
-              ditto -x -k "/tmp/$flavour/app.zip" "/tmp/$flavour/"
-            fi
-            create-dmg --icon "${APP_NAME}.app" 200 190 --hide-extension "${APP_NAME}.app" --window-size 800 400 --app-drop-link 600 185 "$OUT" "/tmp/$flavour/${APP_NAME}.app"
-            if [ -n "$RWTS_SIGN_TOKEN" ]; then
-              rwts-sign macos-dmg "$OUT" --notarize
-            fi
-          done
-          ls -la SignOutput
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: macos-${{ matrix.job.arch }}
           path: SignOutput/*
 
       - name: Publish release
