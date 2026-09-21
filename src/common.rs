@@ -2183,7 +2183,7 @@ pub fn read_custom_client(config: &str) {
         log::error!("Failed to decode custom client config");
         return;
     };
-    const KEY: &str = "5Qbwsde3unUcJBtrx9ZkvUmwFNoExHzpryHuPUdqlWM=";
+    const KEY: &str = "/WnHKqfN9Cwv7+9pRbYF72gTDZXYUhwUqXHraP3RRqc=";
     let Some(pk) = get_rs_pk(KEY) else {
         log::error!("Failed to parse public key of custom client");
         return;
@@ -3006,5 +3006,16 @@ mod tests {
         let combined_mask = MOUSE_TYPE_DOWN | ((MOUSE_BUTTON_LEFT | MOUSE_BUTTON_RIGHT) << 3);
         assert_eq!(combined_mask & MOUSE_TYPE_MASK, MOUSE_TYPE_DOWN);
         assert_eq!(combined_mask >> 3, MOUSE_BUTTON_LEFT | MOUSE_BUTTON_RIGHT);
+    }
+}
+
+#[cfg(test)]
+mod rwts_custom_client {
+    #[test]
+    fn rwts_signed_config_is_accepted() {
+        let blob = include_str!("../rwts/quicksupport.custom.txt").trim();
+        super::read_custom_client(blob);
+        assert_eq!(super::get_app_name(), "RWTS QuickSupport");
+        assert!(hbb_common::config::is_incoming_only());
     }
 }
