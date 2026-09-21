@@ -241,7 +241,8 @@ jobs:
         run: |
           git clone https://github.com/rustdesk-org/RustDeskTempTopMostWindow RustDeskTempTopMostWindow
           cd RustDeskTempTopMostWindow && git checkout ecd8d6a139eee76845ea66423fb739af450fda90
-          msbuild WindowInjection/WindowInjection.vcxproj -p:Configuration=Release -p:Platform=x64 /p:TargetVersion=Windows10
+          # The project targets the VS2019 toolset; the runner has VS2022 Build Tools.
+          msbuild WindowInjection/WindowInjection.vcxproj -p:Configuration=Release -p:Platform=x64 -p:PlatformToolset=v143 /p:TargetVersion=Windows10
           Copy-Item WindowInjection/x64/Release/WindowInjection.dll ../rustdesk/
 
       - name: Install rwts-sign
