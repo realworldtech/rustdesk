@@ -3,13 +3,18 @@ name: RWTS QuickSupport release
 # Builds the RWTS QuickSupport clients for Windows x64 from the rwts branch on
 # the internal GitHub. macOS is built by rwts/build-macos.sh on a Mac, because
 # there is no macOS runner. Steps are copied from flutter-build.yml at the upstream tag this
-# branch is based on, with signing replaced by rwts-sign. Signing runs only
-# when the RWTS_SIGN_TOKEN secret is set, so unsigned builds always work.
+# branch is based on, with signing replaced by rwts-sign. Signing authenticates
+# with the job's GitHub OIDC token; the signing service maps this repository and
+# ref to the quicksupport project, so no signing secret is stored here.
 
 on:
   push:
     tags: ["rwts/*"]
   workflow_dispatch:
+
+permissions:
+  contents: write # release publish
+  id-token: write # rwts-sign OIDC
 
 env:
   SCITER_RUST_VERSION: "1.75"
@@ -20,7 +25,6 @@ env:
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   UPLOAD_ARTIFACT: "true"
   APP_NAME: "RWTS QuickSupport"
-  RWTS_SIGN_TOKEN: "${{ secrets.RWTS_SIGN_TOKEN }}"
 
 jobs:
   generate-bridge:
@@ -246,12 +250,11 @@ jobs:
           Copy-Item WindowInjection/x64/Release/WindowInjection.dll ../rustdesk/
 
       - name: Install rwts-sign
-        if: env.RWTS_SIGN_TOKEN != ''
         shell: bash
-        run: pipx install rwts-sign --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
+        # --force so the persistent runner picks up new client releases.
+        run: pipx install --force "rwts-sign>=0.1.5" --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
 
       - name: Sign inner binaries
-        if: env.RWTS_SIGN_TOKEN != ''
         shell: bash
         run: |
           for f in ./rustdesk/*.exe ./rustdesk/*.dll; do
@@ -288,7 +291,6 @@ jobs:
           popd
 
       - name: Sign outputs
-        if: env.RWTS_SIGN_TOKEN != ''
         shell: bash
         run: rwts-sign apply
 
