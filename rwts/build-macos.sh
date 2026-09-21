@@ -53,7 +53,8 @@ if [ ! -x "$VCPKG_ROOT/vcpkg" ]; then
   git clone -q https://github.com/microsoft/vcpkg "$VCPKG_ROOT"
   (cd "$VCPKG_ROOT" && git checkout -q 120deac3062162151622ca4860575a33844ba10b && ./bootstrap-vcpkg.sh -disableMetrics)
 fi
-"$VCPKG_ROOT/vcpkg" install --triplet "$TRIPLET" --x-install-root="$VCPKG_ROOT/installed"
+# ffmpeg is a "host" dependency in vcpkg.json; pin the host triplet too or a cross build gets the wrong one.
+"$VCPKG_ROOT/vcpkg" install --triplet "$TRIPLET" --host-triplet "$TRIPLET" --x-install-root="$VCPKG_ROOT/installed"
 
 # Xcode 27 refuses the upstream 10.14 deployment target, so both architectures build for 12.3.
 if true; then
