@@ -1,11 +1,14 @@
 name: RWTS QuickSupport release
 
-# Builds the RWTS QuickSupport clients for Windows x64 from the rwts branch on
-# the internal GitHub. macOS is built by rwts/build-macos.sh on a Mac, because
-# there is no macOS runner. Steps are copied from flutter-build.yml at the upstream tag this
-# branch is based on, with signing replaced by rwts-sign. Signing authenticates
-# with the job's GitHub OIDC token; the signing service maps this repository and
-# ref to the quicksupport project, so no signing secret is stored here.
+# Builds the RWTS QuickSupport clients from the rwts branch on the internal
+# GitHub: Windows x64 on the shared Windows VM runners, macOS arm64 and
+# x86_64 on the shared macOS VM runners (rwts/build-macos.sh), then publishes
+# all six files to one GitHub release. Windows steps are copied from
+# flutter-build.yml at the upstream tag this branch is based on, with signing
+# replaced by rwts-sign. Signing authenticates with the job's GitHub OIDC
+# token; the signing service maps this repository and ref to the quicksupport
+# project, so no signing secret is stored here. The runners are ephemeral;
+# only the GHES actions cache (vcpkg binaries, Rust) survives between runs.
 
 on:
   push:
@@ -113,8 +116,8 @@ jobs:
   build-windows:
     name: windows x86_64
     needs: [generate-bridge, check-blobs, version]
-    # Project-specific Windows Server 2022 runner VM (quicksupport-winrunner) on au-east-1.
-    runs-on: [self-hosted, windows]
+    runs-on: [self-hosted, windows, x64, vm]
+    timeout-minutes: 110 # the platform kills the VM at 120
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -315,8 +318,102 @@ jobs:
           name: windows-x86_64
           path: SignOutput/*
 
+  build-macos:
+    name: macos ${{ matrix.arch }}
+    needs: [generate-bridge, check-blobs, version]
+    runs-on: [self-hosted, macos, arm64, vm]
+    timeout-minutes: 110 # the platform kills the VM at 120
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64] # an arm64 VM cross-builds x86_64
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410 # v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Restore bridge files
+        uses: actions/download-artifact@246d7188e736d3686f6d19628d253ede9697bd55 # v3-node20 (GHES rejects v4+)
+        with:
+          name: bridge-artifact
+          path: ./
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.MAC_RUST_VERSION }}
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          components: "rustfmt"
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: macos-${{ matrix.arch }}
+
+      - name: Install flutter
+        uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225 # v2.12.0
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Patch flutter
+        # Same dropdown patch as the Windows job, plus upstream's macOS
+        # workaround for flutter issue 133533.
+        shell: bash
+        run: |
+          cd "$(dirname "$(dirname "$(which flutter)")")"
+          git apply "$GITHUB_WORKSPACE/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
+          sed -i '' -e 's/_setFramesEnabledState(false);/\/\/_setFramesEnabledState(false);/g' packages/flutter/lib/src/scheduler/binding.dart
+          grep -n '_setFramesEnabledState(false);' packages/flutter/lib/src/scheduler/binding.dart
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
+        with:
+          vcpkgDirectory: ${{ github.workspace }}/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Build, sign and notarize
+        # The script installs the vcpkg ports for the triplet, builds, signs
+        # both flavours with rwts-sign (OIDC) and makes the DMGs.
+        shell: bash
+        run: rwts/build-macos.sh "$VERSION" "${{ matrix.arch }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@c24449f33cd45d4826c6702db7e49f7cdb9b551d # v3-node20 (GHES rejects v4+)
+        with:
+          name: macos-${{ matrix.arch }}
+          path: SignOutput/*.dmg
+
+  release:
+    name: publish GitHub release
+    if: github.ref_type == 'tag'
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@246d7188e736d3686f6d19628d253ede9697bd55 # v3-node20 (GHES rejects v4+)
+        with:
+          name: windows-x86_64
+          path: SignOutput
+      - uses: actions/download-artifact@246d7188e736d3686f6d19628d253ede9697bd55 # v3-node20 (GHES rejects v4+)
+        with:
+          name: macos-arm64
+          path: SignOutput
+      - uses: actions/download-artifact@246d7188e736d3686f6d19628d253ede9697bd55 # v3-node20 (GHES rejects v4+)
+        with:
+          name: macos-x86_64
+          path: SignOutput
+      - run: ls -la SignOutput
       - name: Publish release
-        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
           prerelease: true
