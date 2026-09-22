@@ -40,7 +40,10 @@ rustup toolchain install 1.81 --profile minimal >/dev/null
 rustup target add --toolchain 1.81 "$TARGET" >/dev/null
 rustup component add rustfmt --toolchain 1.81 >/dev/null
 export RUSTUP_TOOLCHAIN=1.81
-flutter --version | head -1 | grep -q "3.24.5" || { echo "flutter 3.24.5 required" >&2; exit 1; }
+# Read the whole output first: Flutter may print an update notice before the version line,
+# and a pipe that closes early makes it crash with a broken pipe.
+FLUTTER_VERSION_OUTPUT="$(flutter --version 2>&1)"
+grep -q "^Flutter 3.24.5" <<<"$FLUTTER_VERSION_OUTPUT" || { echo "flutter 3.24.5 required, got:" >&2; echo "$FLUTTER_VERSION_OUTPUT" >&2; exit 1; }
 
 # bindgen 0.59 in libs/scrap cannot parse headers through a very new Homebrew
 # libclang (silently emits empty structs). Use Xcode's libclang instead.
