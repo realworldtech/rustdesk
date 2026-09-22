@@ -24,7 +24,8 @@ env:
   MAC_RUST_VERSION: "1.81"
   LLVM_VERSION: "15.0.6"
   FLUTTER_VERSION: "3.24.5"
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  # The x-gha backend no longer exists in current vcpkg; a files cache under the workspace is saved with actions/cache instead.
+  VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}/.vcpkg-bincache,readwrite"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   UPLOAD_ARTIFACT: "true"
   APP_NAME: "RWTS QuickSupport"
@@ -117,7 +118,7 @@ jobs:
     name: windows x86_64
     needs: [generate-bridge, check-blobs, version]
     runs-on: [self-hosted, windows, x64, vm]
-    timeout-minutes: 110 # the platform kills the VM at 120
+    timeout-minutes: 115 # the platform kills the VM at 120
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -184,6 +185,13 @@ jobs:
         with:
           prefix-key: windows-2022
 
+      - name: Restore vcpkg binary cache
+        id: vcpkg-bincache
+        uses: actions/cache/restore@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-bin-windows-x64-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json') }}
+
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
         with:
@@ -200,6 +208,14 @@ jobs:
             find "${VCPKG_ROOT}/" -name "*.log" | while read -r _1; do echo "$_1:"; cat "$_1"; done
             exit 1
           fi
+
+      - name: Save vcpkg binary cache
+        # Saved as soon as the ports are built, so a job that later fails or times out still seeds the next run.
+        if: always() && steps.vcpkg-bincache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-bin-windows-x64-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Build rustdesk
         env:
@@ -375,6 +391,13 @@ jobs:
           sed -i '' -e 's/_setFramesEnabledState(false);/\/\/_setFramesEnabledState(false);/g' packages/flutter/lib/src/scheduler/binding.dart
           grep -n '_setFramesEnabledState(false);' packages/flutter/lib/src/scheduler/binding.dart
 
+      - name: Restore vcpkg binary cache
+        id: vcpkg-bincache
+        uses: actions/cache/restore@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-bin-macos-${{ matrix.arch }}-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json') }}
+
       - name: Setup vcpkg with Github Actions binary cache
         uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
         with:
@@ -387,6 +410,14 @@ jobs:
         # both flavours with rwts-sign (OIDC) and makes the DMGs.
         shell: bash
         run: rwts/build-macos.sh "$VERSION" "${{ matrix.arch }}"
+
+      - name: Save vcpkg binary cache
+        # The script builds the ports; save them even when a later part of it failed.
+        if: always() && steps.vcpkg-bincache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@6f8efc29b200d32929f49075959781ed54ec270c # v3
+        with:
+          path: .vcpkg-bincache
+          key: vcpkg-bin-macos-${{ matrix.arch }}-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@c24449f33cd45d4826c6702db7e49f7cdb9b551d # v3-node20 (GHES rejects v4+)
