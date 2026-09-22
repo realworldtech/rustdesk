@@ -110,7 +110,8 @@ for flavour in quicksupport technician; do
   rm -rf "$W/${NAME}.app"; ditto -x -k "$W/app.zip" "$W/"
   if [ "$flavour" = technician ]; then OUT="SignOutput/RWTS-QuickSupport-Tech-${VERSION}-${ARCH}.dmg"; else OUT="SignOutput/RWTS-QuickSupport-${VERSION}-${ARCH}.dmg"; fi
   rm -f "$OUT"
-  create-dmg --icon "${NAME}.app" 200 190 --hide-extension "${NAME}.app" --window-size 800 400 --app-drop-link 600 185 "$OUT" "$W/${NAME}.app"
+  # The headless runner VM has no Finder session, so the window-layout AppleScript times out there.
+  create-dmg ${GITHUB_ACTIONS:+--skip-jenkins} --icon "${NAME}.app" 200 190 --hide-extension "${NAME}.app" --window-size 800 400 --app-drop-link 600 185 "$OUT" "$W/${NAME}.app"
   sign macos-dmg "$OUT" --notarize
   xcrun stapler validate "$OUT"
 done
