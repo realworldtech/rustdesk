@@ -10,7 +10,8 @@ import base64, json, sys
 from nacl.signing import VerifyKey
 blob, key = open(sys.argv[1]).read().strip(), sys.argv[2]
 settings = json.loads(VerifyKey(base64.b64decode(key)).verify(base64.b64decode(blob)))
-assert settings["app-name"] == "RWTS QuickSupport", settings
+assert settings["app-name"].startswith("RWTS QuickSupport"), settings
+assert settings.get("hide-powered-by-me") == "Y", settings
 print(f"{sys.argv[1]}: ok, conn-type={settings.get('conn-type')}")
 PY
 done

@@ -78,14 +78,28 @@ sign() { rwts-sign "$@" || { echo "rwts-sign failed, retrying once" >&2; sleep 1
 mkdir -p SignOutput
 for flavour in quicksupport technician; do
   W="/tmp/qs-$flavour"; rm -rf "$W"; mkdir -p "$W"
-  cp -R "$APP" "$W/${APP_NAME}.app"
-  cp "rwts/${flavour}.custom.txt" "$W/${APP_NAME}.app/Contents/Resources/custom.txt"
-  ditto -c -k --keepParent "$W/${APP_NAME}.app" "$W/app.zip"
+  NAME="$APP_NAME"
+  cp -R "$APP" "$W/${NAME}.app"
+  cp "rwts/${flavour}.custom.txt" "$W/${NAME}.app/Contents/Resources/custom.txt"
+  if [ "$flavour" = technician ]; then
+    # Its own name and bundle identifier, so it can sit beside the customer app
+    # and macOS keeps its permissions separate. The code reads the identifier
+    # from the bundle at run time.
+    NAME="${APP_NAME} Technician"
+    mv "$W/${APP_NAME}.app" "$W/${NAME}.app"
+    mv "$W/${NAME}.app/Contents/MacOS/${APP_NAME}" "$W/${NAME}.app/Contents/MacOS/${NAME}"
+    PLIST="$W/${NAME}.app/Contents/Info.plist"
+    plutil -replace CFBundleExecutable -string "$NAME" "$PLIST"
+    plutil -replace CFBundleName -string "$NAME" "$PLIST"
+    plutil -replace CFBundleDisplayName -string "$NAME" "$PLIST"
+    plutil -replace CFBundleIdentifier -string "au.com.rwts.quicksupport.technician" "$PLIST"
+  fi
+  ditto -c -k --keepParent "$W/${NAME}.app" "$W/app.zip"
   sign macos-app "$W/app.zip" --notarize
-  rm -rf "$W/${APP_NAME}.app"; ditto -x -k "$W/app.zip" "$W/"
+  rm -rf "$W/${NAME}.app"; ditto -x -k "$W/app.zip" "$W/"
   if [ "$flavour" = technician ]; then OUT="SignOutput/RWTS-QuickSupport-Tech-${VERSION}-${ARCH}.dmg"; else OUT="SignOutput/RWTS-QuickSupport-${VERSION}-${ARCH}.dmg"; fi
   rm -f "$OUT"
-  create-dmg --icon "${APP_NAME}.app" 200 190 --hide-extension "${APP_NAME}.app" --window-size 800 400 --app-drop-link 600 185 "$OUT" "$W/${APP_NAME}.app"
+  create-dmg --icon "${NAME}.app" 200 190 --hide-extension "${NAME}.app" --window-size 800 400 --app-drop-link 600 185 "$OUT" "$W/${NAME}.app"
   sign macos-dmg "$OUT" --notarize
   xcrun stapler validate "$OUT"
 done
