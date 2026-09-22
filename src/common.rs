@@ -938,10 +938,24 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
     }
 }
 
-pub fn check_software_update() {
-    if is_custom_client() {
-        return;
+/// RWTS release version this binary was built as (see build.rs).
+pub const RWTS_VERSION: &str = env!("RWTS_VERSION");
+
+/// Name of the release file this client updates to, as published under
+/// https://quicksupport.rwts.com.au/releases/<version>/.
+pub fn rwts_update_file_name(technician: bool, msi_installed: bool, os: &str, arch: &str) -> Option<String> {
+    let base = if technician { "RWTS-QuickSupport-Tech" } else { "RWTS-QuickSupport" };
+    match (os, arch) {
+        ("windows", "x86_64") if technician && msi_installed => Some(format!("{base}.msi")),
+        ("windows", "x86_64") => Some(format!("{base}.exe")),
+        ("macos", "aarch64") => Some(format!("{base}-arm64.dmg")),
+        ("macos", "x86_64") => Some(format!("{base}-x86_64.dmg")),
+        _ => None,
     }
+}
+
+pub fn check_software_update() {
+    // RWTS builds check their own site; upstream skips custom clients here.
     let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
     if config::option2bool(keys::OPTION_ENABLE_CHECK_UPDATE, &opt) {
         std::thread::spawn(move || allow_err!(do_check_software_update()));
@@ -982,7 +996,7 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
     let response_url = resp.url;
     let latest_release_version = response_url.rsplit('/').next().unwrap_or_default();
 
-    if get_version_number(&latest_release_version) > get_version_number(crate::VERSION) {
+    if get_version_number(&latest_release_version) > get_version_number(RWTS_VERSION) {
         #[cfg(feature = "flutter")]
         {
             let mut m = HashMap::new();
@@ -3017,5 +3031,25 @@ mod rwts_custom_client {
         super::read_custom_client(blob);
         assert_eq!(super::get_app_name(), "RWTS QuickSupport");
         assert!(hbb_common::config::is_incoming_only());
+    }
+}
+
+#[cfg(test)]
+mod rwts_update {
+    use super::rwts_update_file_name as name;
+
+    #[test]
+    fn picks_the_release_file_for_each_build() {
+        assert_eq!(name(false, false, "windows", "x86_64").unwrap(), "RWTS-QuickSupport.exe");
+        assert_eq!(name(true, true, "windows", "x86_64").unwrap(), "RWTS-QuickSupport-Tech.msi");
+        assert_eq!(name(true, false, "windows", "x86_64").unwrap(), "RWTS-QuickSupport-Tech.exe");
+        assert_eq!(name(false, false, "macos", "aarch64").unwrap(), "RWTS-QuickSupport-arm64.dmg");
+        assert_eq!(name(true, false, "macos", "x86_64").unwrap(), "RWTS-QuickSupport-Tech-x86_64.dmg");
+        assert!(name(false, false, "linux", "x86_64").is_none());
+    }
+
+    #[test]
+    fn release_version_defaults_to_the_package_version() {
+        assert!(super::RWTS_VERSION.starts_with(env!("CARGO_PKG_VERSION")));
     }
 }

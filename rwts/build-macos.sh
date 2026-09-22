@@ -20,6 +20,7 @@ case "$ARCH" in x86_64|arm64) ;; *) echo "arch must be x86_64 or arm64" >&2; exi
 TARGET=$([ "$ARCH" = arm64 ] && echo aarch64-apple-darwin || echo x86_64-apple-darwin)
 TRIPLET=$([ "$ARCH" = arm64 ] && echo arm64-osx || echo x64-osx)
 export MAC_ARCH="$ARCH"
+export RWTS_VERSION="$VERSION" # in-app update check compares against this
 EXTRA=$([ "$ARCH" = arm64 ] && echo "--screencapturekit" || echo "")
 
 command -v rwts-sign >/dev/null || pipx install rwts-sign --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"

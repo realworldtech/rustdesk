@@ -430,14 +430,15 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildHelpCards(String updateUrl) {
-    if (!bind.isCustomClient() &&
-        updateUrl.isNotEmpty &&
-        !isCardClosed &&
-        bind.mainUriPrefixSync().contains('rustdesk')) {
-      final isToUpdate = (isWindows || isMacOS) && bind.mainIsInstalled();
+    // RWTS QuickSupport: offered for every build; the user must click.
+    if (updateUrl.isNotEmpty && !isCardClosed) {
+      // Windows portable relaunches into the new version; installed
+      // Windows and macOS apps update in place; a macOS app run from the
+      // DMG is sent to the site.
+      final isToUpdate = isWindows || (isMacOS && bind.mainIsInstalled());
       String btnText = isToUpdate ? 'Update' : 'Download';
       GestureTapCallback onPressed = () async {
-        final Uri url = Uri.parse('https://rustdesk.com/download');
+        final Uri url = Uri.parse('https://quicksupport.rwts.com.au/');
         await launchUrl(url);
       };
       if (isToUpdate) {
@@ -452,9 +453,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           onPressed,
           closeButton: true,
           help: isToUpdate ? 'Changelog' : null,
-          link: isToUpdate
-              ? 'https://github.com/rustdesk/rustdesk/releases/tag/${bind.mainGetNewVersion()}'
-              : null);
+          link: isToUpdate ? 'https://quicksupport.rwts.com.au/' : null);
     }
     if (systemError.isNotEmpty) {
       return buildInstallCard("", systemError, "", () {});

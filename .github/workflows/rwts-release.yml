@@ -199,6 +199,9 @@ jobs:
           fi
 
       - name: Build rustdesk
+        env:
+          # The in-app update check compares against this; unset on non-tag builds.
+          RWTS_VERSION: ${{ github.ref_type == 'tag' && env.VERSION || '' }}
         run: |
           python3 .\build.py --portable --flutter --skip-portable-pack --hwcodec --vram
           mv ./flutter/build/windows/x64/runner/Release ./rustdesk

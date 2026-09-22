@@ -79,6 +79,14 @@ fn install_android_deps() {
 
 fn main() {
     hbb_common::gen_version();
+    // RWTS release version (e.g. 1.4.9-3) for the in-app update check. The
+    // protocol keeps upstream's VERSION; this is only compared with the site.
+    println!("cargo:rerun-if-env-changed=RWTS_VERSION");
+    let rwts_version = std::env::var("RWTS_VERSION")
+        .ok()
+        .filter(|v| v.chars().next().map_or(false, |c| c.is_ascii_digit()))
+        .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").unwrap());
+    println!("cargo:rustc-env=RWTS_VERSION={}", rwts_version);
     install_android_deps();
     #[cfg(all(windows, feature = "inline"))]
     build_manifest();

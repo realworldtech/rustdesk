@@ -3611,6 +3611,16 @@ pub fn handle_custom_client_staging_dir_before_update(
 
 // Used for auto update and manual update in the main window.
 pub fn update_to(file: &str) -> ResultType<()> {
+    if file.ends_with(".exe") && !is_installed() {
+        // RWTS QuickSupport portable: run the new portable executable and leave.
+        // Running it as an installer ("--update") is not wanted for a quick-support session.
+        std::process::Command::new(file).spawn()?;
+        std::thread::spawn(|| {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::process::exit(0);
+        });
+        return Ok(());
+    }
     if file.ends_with(".exe") {
         let custom_client_staging_dir = get_custom_client_staging_dir();
         if crate::is_custom_client() {

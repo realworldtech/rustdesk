@@ -2854,41 +2854,25 @@ pub fn main_get_common(key: String) -> String {
                 }
             }
         } else if key.starts_with("download-file-") {
-            let _version = key.replace("download-file-", "");
+            // RWTS release files have fixed names under /releases/<version>/.
+            let technician = config::is_outgoing_only();
             #[cfg(target_os = "windows")]
-            return match (
-                crate::platform::windows::is_msi_installed(),
-                crate::common::is_custom_client(),
-            ) {
-                (Ok(true), false) => match crate::platform::windows::release_arch_suffix() {
-                    Some(arch) => format!("rustdesk-{_version}-{arch}.msi"),
-                    None => "error:unsupported".to_owned(),
-                },
-                (Ok(true), true) | (Ok(false), _) => {
-                    match crate::platform::windows::release_arch_suffix() {
-                        Some(arch) => format!("rustdesk-{_version}-{arch}.exe"),
-                        None => "error:unsupported".to_owned(),
-                    }
-                }
-                (Err(e), _) => {
+            let msi_installed = match crate::platform::windows::is_msi_installed() {
+                Ok(v) => v,
+                Err(e) => {
                     log::error!("Failed to check if is msi: {}", e);
-                    format!("error:update-failed-check-msi-tip")
+                    return "error:update-failed-check-msi-tip".to_owned();
                 }
             };
-            #[cfg(target_os = "macos")]
-            {
-                return if cfg!(target_arch = "x86_64") {
-                    format!("rustdesk-{_version}-x86_64.dmg")
-                } else if cfg!(target_arch = "aarch64") {
-                    format!("rustdesk-{_version}-aarch64.dmg")
-                } else {
-                    "error:unsupported".to_owned()
-                };
-            }
-            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-            {
-                "error:unsupported".to_owned()
-            }
+            #[cfg(not(target_os = "windows"))]
+            let msi_installed = false;
+            crate::common::rwts_update_file_name(
+                technician,
+                msi_installed,
+                std::env::consts::OS,
+                std::env::consts::ARCH,
+            )
+            .unwrap_or_else(|| "error:unsupported".to_owned())
         } else {
             "".to_owned()
         }
