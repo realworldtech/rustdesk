@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Build, sign, notarize and upload the macOS QuickSupport DMGs on a Mac.
+# Build, sign and notarize the macOS QuickSupport DMGs for one architecture.
 #
-# There is no macOS runner on the internal GitHub, so a team member runs this
-# on any Mac with Xcode for each release. It repeats the macOS job of the
-# upstream workflow for the host architecture only.
+# The build-macos jobs of .github/workflows/rwts-release.yml run this on the
+# shared macOS runners, once per architecture. A team member can also run it
+# on any Mac with Xcode when the runners are down. It repeats the macOS job
+# of the upstream workflow, with signing replaced by rwts-sign.
 #
 # Usage:  rwts/build-macos.sh <version> [arch]     # e.g. 1.4.9-1 x86_64
 #         arch is x86_64 or arm64; the default is the host. An arm64 Mac can
 #         cross-build x86_64 (cargo --target plus the vcpkg x64-osx triplet).
-# Needs:  Xcode, Homebrew, rustup, flutter 3.24.5 on PATH, rwts-sign
-#         (RWTS_SIGN_TOKEN set or a chmod 600 .rwts-sign.credentials),
-#         gh authenticated to github.realworld.net.au.
+# Needs:  Xcode, Homebrew, rustup, flutter 3.24.5 on PATH, rwts-sign.
+#         In Actions rwts-sign uses the job's OIDC token; on a Mac set
+#         RWTS_SIGN_TOKEN or keep a chmod 600 .rwts-sign.credentials.
 set -euo pipefail
 VERSION="${1:?usage: rwts/build-macos.sh <version>}"
 cd "$(dirname "$0")/.."
@@ -25,9 +26,15 @@ EXTRA=$([ "$ARCH" = arm64 ] && echo "--screencapturekit" || echo "")
 
 command -v rwts-sign >/dev/null || pipx install rwts-sign --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
 brew list create-dmg pkgconf cocoapods >/dev/null 2>&1 || brew install create-dmg pkgconf cocoapods
+# Homebrew ships NASM 3.x, which breaks the aom build. Put 2.16.03 first on PATH.
 if ! nasm --version 2>/dev/null | grep -q 'version 2\.'; then
-  echo "NASM 2.16.x is required (NASM 3.x breaks aom). Install from https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/" >&2
-  exit 1
+  NASM_ZIP="$(mktemp -d)/nasm-2.16.03-macosx.zip"
+  curl -fsSL -o "$NASM_ZIP" https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/nasm-2.16.03-macosx.zip
+  echo "0d29bcd8a5fc617333f4549c7c1f93d1866a4a0915c40359e0a8585bb1a5aa75  $NASM_ZIP" | shasum -a 256 -c -
+  mkdir -p "$HOME/.local/bin"
+  unzip -j -o -q "$NASM_ZIP" nasm-2.16.03/nasm -d "$HOME/.local/bin"
+  export PATH="$HOME/.local/bin:$PATH"
+  nasm --version | grep -q 'version 2\.'
 fi
 rustup toolchain install 1.81 --profile minimal >/dev/null
 rustup target add --toolchain 1.81 "$TARGET" >/dev/null
@@ -106,10 +113,6 @@ for flavour in quicksupport technician; do
 done
 ls -la SignOutput/*.dmg
 
-if GH_HOST=github.realworld.net.au gh release view "rwts/${VERSION}" -R realworldtech/rustdesk >/dev/null 2>&1; then
-  GH_HOST=github.realworld.net.au gh release upload "rwts/${VERSION}" SignOutput/*.dmg --clobber -R realworldtech/rustdesk
-  echo "Uploaded to release rwts/${VERSION} on github.realworld.net.au"
-else
-  echo "Release rwts/${VERSION} does not exist yet. Upload later with:"
-  echo "  GH_HOST=github.realworld.net.au gh release upload rwts/${VERSION} SignOutput/*.dmg -R realworldtech/rustdesk"
+if [ -z "${GITHUB_ACTIONS:-}" ]; then
+  echo "Upload with: GH_HOST=github.realworld.net.au gh release upload rwts/${VERSION} SignOutput/*.dmg --clobber -R realworldtech/rustdesk"
 fi
