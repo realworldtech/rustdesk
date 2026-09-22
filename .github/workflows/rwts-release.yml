@@ -257,11 +257,13 @@ jobs:
         # --force so the persistent runner picks up new client releases.
         run: pipx install --force "rwts-sign>=0.1.5" --pip-args "--index-url https://devpi.realworld.net.au/realworld/dev/+simple/"
 
+      # The GHES OIDC token endpoint sometimes times out; one retry covers it.
       - name: Sign inner binaries
         shell: bash
         run: |
+          sign() { rwts-sign "$@" || { echo "rwts-sign failed, retrying once" >&2; sleep 10; rwts-sign "$@"; }; }
           for f in ./rustdesk/*.exe ./rustdesk/*.dll; do
-            rwts-sign windows-pe "$f"
+            sign windows-pe "$f"
           done
 
       - name: Build quick-support portable executable
@@ -295,7 +297,10 @@ jobs:
 
       - name: Sign outputs
         shell: bash
-        run: rwts-sign apply
+        run: |
+          sign() { rwts-sign "$@" || { echo "rwts-sign failed, retrying once" >&2; sleep 10; rwts-sign "$@"; }; }
+          sign windows-pe SignOutput/RWTS-QuickSupport.exe
+          sign windows-pe SignOutput/RWTS-QuickSupport.msi
 
       - name: Name outputs with the version
         shell: bash
