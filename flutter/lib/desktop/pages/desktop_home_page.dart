@@ -453,7 +453,8 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           onPressed,
           closeButton: true,
           help: isToUpdate ? 'Changelog' : null,
-          link: isToUpdate ? 'https://quicksupport.rwts.com.au/' : null);
+          link: isToUpdate ? 'https://quicksupport.rwts.com.au/' : null,
+          ignoreHideHelpCards: true);
     }
     if (systemError.isNotEmpty) {
       return buildInstallCard("", systemError, "", () {});
@@ -578,8 +579,10 @@ class _DesktopHomePageState extends State<DesktopHomePage>
       String? help,
       String? link,
       bool? closeButton,
-      String? closeOption}) {
-    if (bind.mainGetBuildinOption(key: kOptionHideHelpCards) == 'Y' &&
+      String? closeOption,
+      bool ignoreHideHelpCards = false}) {
+    if (!ignoreHideHelpCards &&
+        bind.mainGetBuildinOption(key: kOptionHideHelpCards) == 'Y' &&
         content != 'install_daemon_tip') {
       return const SizedBox();
     }

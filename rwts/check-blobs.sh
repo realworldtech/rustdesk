@@ -11,7 +11,8 @@ from nacl.signing import VerifyKey
 blob, key = open(sys.argv[1]).read().strip(), sys.argv[2]
 settings = json.loads(VerifyKey(base64.b64decode(key)).verify(base64.b64decode(blob)))
 assert settings["app-name"].startswith("RWTS QuickSupport"), settings
-assert settings.get("hide-powered-by-me") == "Y", settings
+assert settings["override-settings"].get("hide-powered-by-me") == "Y", settings
+assert "hide-powered-by-me" not in settings, "top-level keys are hard settings, not built-in"
 print(f"{sys.argv[1]}: ok, conn-type={settings.get('conn-type')}")
 PY
 done

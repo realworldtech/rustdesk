@@ -3031,6 +3031,9 @@ mod rwts_custom_client {
         super::read_custom_client(blob);
         assert_eq!(super::get_app_name(), "RWTS QuickSupport");
         assert!(hbb_common::config::is_incoming_only());
+        // The home page reads this from BUILTIN_SETTINGS, so the blob must
+        // carry it under override-settings, not at the top level.
+        assert_eq!(super::get_builtin_option("hide-powered-by-me"), "Y");
     }
 }
 
